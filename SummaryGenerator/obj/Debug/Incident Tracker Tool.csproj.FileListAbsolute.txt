@@ -1,0 +1,14 @@
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\bin\Debug\SummaryGenerator.exe.config
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\bin\Debug\SummaryGenerator.exe.manifest
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\bin\Debug\SummaryGenerator.application
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\bin\Debug\SummaryGenerator.exe
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\bin\Debug\SummaryGenerator.pdb
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\Incident Tracker Tool.csprojResolveAssemblyReference.cache
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.Form1.resources
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.Properties.Resources.resources
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\Incident Tracker Tool.csproj.GenerateResource.Cache
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\Incident Tracker Tool.csproj.CoreCompileInputs.cache
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.exe.manifest
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.application
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.exe
+C:\Users\128953\source\repos\SummaryGenerator\SummaryGenerator\obj\Debug\SummaryGenerator.pdb
