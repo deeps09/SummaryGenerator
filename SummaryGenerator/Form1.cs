@@ -12,14 +12,14 @@ using System.Data.OleDb;
 using Microsoft.CSharp;
 using Excel = Microsoft.Office.Interop.Excel;
 using MyMarshal = System.Runtime.InteropServices.Marshal;
-
+using System.Threading;
 
 namespace SummaryGenerator
 {
     public partial class Form1 : Form
     {
 
-        // keys stored in app.config file 
+        // keys stored in app.config file used to show recent file paths
         const String MS4_SRC_FILE_KEY = "ms4SrcFile", MS4_DEST_FILE_KEY = "ms4DestFile", INI_SRC_FILE_KEY = "initiateSrcFile", INI_DEST_FILE_KEY = "initiateDestFile";
 
         public Form1()
@@ -55,6 +55,8 @@ namespace SummaryGenerator
         }
 
         private DataTable loadDataFromSourceExcel() {
+            toolStripStatusLabel1.Text = "Reading records from source file..";
+            Thread.Sleep(2000);
 
             String _null = "";
             String srcSheetName = "Page 1$";
@@ -83,7 +85,7 @@ namespace SummaryGenerator
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.Message);
+                MessageBox.Show(e.Message, "Error while reading from source");
                 Cursor.Current = Cursors.Default;
             }
             finally {
@@ -113,18 +115,24 @@ namespace SummaryGenerator
             String incidentNumber, incidentDesc, severity, status, resolutionSummary, assigneeIndividual, 
                 customerName, incidentOpenDt, incidentActualStartDt, incidentResolvedDt, assigneeGroup;
 
+            // fetching relevant data from resolution summary
+            String keywordCategory = "CATEGORY: ", keywordRootCause = "ROOT CAUSE: ",
+                keywordAffItems = "AFFECTED ITEMS/SYSTEMS: ", keywordFacility = "AFFECTED FACILITIES/USERS: ", keywordOutage = "OUTAGE DURATION: ";              ;
+            String ticketType = null, category = null,  subCategory = null, affctedItem = null, affectedFacility = null;
             String existingState;
 
             int noOfIncidentsUpdated = 0, noOfIncidentsAdded = 0, noOfIncidentsSkipped = 0;
-            int countOfIncidentFound;
+            int countOfIncidentFound, i = 1;
 
             DataRow[] foundRows;
             int totalCount = destDataSet.Rows.Count + 2; // one for blank row and one for getting new row for intertion
+            
 
             try
             {
                 foreach (DataRow dataRow in srcDataset.Rows)
                 {
+                    toolStripStatusLabel1.Text = "Prcessing "+ i +" of "+ srcDataset.Rows.Count + " incidents..";
                     countOfIncidentFound = -1;
 
                     incidentNumber = dataRow["Number"].ToString();
@@ -142,6 +150,34 @@ namespace SummaryGenerator
                     if (incidentResolvedDt == String.Empty)
                         incidentResolvedDt = DateTime.MinValue.ToString();
 
+                    if (resolutionSummary.Length > 10)
+                    {
+                        ticketType = category = subCategory = affctedItem = affectedFacility = null;
+
+                        if (resolutionSummary.Contains(keywordRootCause))
+                            ticketType = MySubString(keywordCategory.Length, resolutionSummary.IndexOf(keywordRootCause) - 2, resolutionSummary);
+
+                        if (resolutionSummary.Contains(keywordCategory))
+                        {
+                            category = MySubString(resolutionSummary.IndexOf(keywordRootCause) + keywordRootCause.Length, resolutionSummary.IndexOf(keywordAffItems) - 2, resolutionSummary);
+                            subCategory = category.Substring(category.IndexOf("-") + 1);
+                            category = category.Substring(0, category.IndexOf("-"));
+                        }
+
+                        if (resolutionSummary.Contains(keywordAffItems))
+                            affctedItem = MySubString(resolutionSummary.IndexOf(keywordAffItems) + keywordAffItems.Length, resolutionSummary.IndexOf(keywordFacility) - 2, resolutionSummary);
+
+                        if (resolutionSummary.Contains(keywordFacility))
+                        {
+                            affectedFacility = MySubString(resolutionSummary.IndexOf(keywordFacility) + keywordFacility.Length, resolutionSummary.IndexOf(keywordOutage) - 2, resolutionSummary);
+
+                            if (affectedFacility.Contains("/")) // this checks if affected facility is having customer name appeneded
+                                affectedFacility = affectedFacility.Substring(0, affectedFacility.IndexOf("/")); 
+                        }
+
+                    }
+
+
                     foundRows = destDataSet.Select("F1 = '" + incidentNumber + "'");
 
 
@@ -152,8 +188,22 @@ namespace SummaryGenerator
                     {
 
                         MySheet.Cells[totalCount, 1] = incidentNumber;
+
+                        if (ticketType != null)
+                            MySheet.Cells[totalCount, 2] = ticketType;
+
                         MySheet.Cells[totalCount, 3] = incidentDesc;
                         MySheet.Cells[totalCount, 4] = severity;
+
+                        if (category != null)
+                            MySheet.Cells[totalCount, 5] = category;
+
+                        if (subCategory != null)
+                            MySheet.Cells[totalCount, 6] = subCategory;
+
+                        if (affectedFacility != null)
+                            MySheet.Cells[totalCount, 7] = affectedFacility;
+
                         MySheet.Cells[totalCount, 8] = status;
                         MySheet.Cells[totalCount, 9] = resolutionSummary;
                         MySheet.Cells[totalCount, 10] = assigneeIndividual;
@@ -162,6 +212,9 @@ namespace SummaryGenerator
                         MySheet.Cells[totalCount, 13] = customerName;
                         MySheet.Cells[totalCount, 14] = incidentOpenDt;
                         MySheet.Cells[totalCount, 16] = incidentResolvedDt;
+
+                        if (affectedFacility != null)
+                            MySheet.Cells[totalCount, 31] = affectedFacility;
 
                         totalCount++;
                         noOfIncidentsAdded++;
@@ -178,8 +231,22 @@ namespace SummaryGenerator
                         if (existingState != "Closed")
                         {
                             MySheet.Cells[countOfIncidentFound, 1] = incidentNumber;
+
+                            if (ticketType!= null)
+                                MySheet.Cells[countOfIncidentFound, 2] = ticketType;
+
                             MySheet.Cells[countOfIncidentFound, 3] = incidentDesc;
                             MySheet.Cells[countOfIncidentFound, 4] = severity;
+
+                            if (category != null)
+                                MySheet.Cells[countOfIncidentFound, 5] = category;
+
+                            if (subCategory != null)
+                                MySheet.Cells[countOfIncidentFound, 6] = subCategory;
+
+                            if (affectedFacility != null)
+                                MySheet.Cells[countOfIncidentFound, 7] = affectedFacility;
+
                             MySheet.Cells[countOfIncidentFound, 8] = status;
                             MySheet.Cells[countOfIncidentFound, 9] = resolutionSummary;
                             MySheet.Cells[countOfIncidentFound, 10] = assigneeIndividual;
@@ -189,6 +256,9 @@ namespace SummaryGenerator
                             MySheet.Cells[countOfIncidentFound, 14] = incidentOpenDt;
                             MySheet.Cells[countOfIncidentFound, 16] = incidentResolvedDt;
 
+                            if (affectedFacility != null)
+                                MySheet.Cells[countOfIncidentFound, 31] = affectedFacility;
+
                             noOfIncidentsUpdated++;
                         }
                         else {
@@ -196,11 +266,14 @@ namespace SummaryGenerator
                         }
                         
                     }
+                    i++;
                 }
+                toolStripStatusLabel1.Text = "Processing completed !!";
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.Message , "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(e.Message , "Error while updating..", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                toolStripStatusLabel1.Text = "Something went wrong..";
             }
             finally {
                 MyBook.Save();
@@ -215,6 +288,7 @@ namespace SummaryGenerator
                 MyMarshal.ReleaseComObject(xlWorkBooks);
                 MyMarshal.ReleaseComObject(MyBook);
                 MyMarshal.ReleaseComObject(MyApp);
+                
             }
 
             int totalTkts = noOfIncidentsUpdated + noOfIncidentsAdded + noOfIncidentsSkipped;
@@ -229,6 +303,10 @@ namespace SummaryGenerator
 
         private DataTable getAllIncidentsFromDestFile(String destSheetName, String destFilePath)
         {
+
+            toolStripStatusLabel1.Text = "Reading records from tracker..";
+            Thread.Sleep(2000);
+
             String _null = "";
             String selectQuery = "SELECT F1 FROM ['" + destSheetName + "'] WHERE [F1] <> '" + _null + "'";
             //String destConnStr = @"Provider=Microsoft.ACE.OLEDB.12.0;
@@ -253,6 +331,7 @@ namespace SummaryGenerator
                 sda.Fill(dt);
             }
             catch (Exception e) {
+                MessageBox.Show(e.Message, "Error while reading from tracker");
             }
             finally {
                 cmd = null;
@@ -262,11 +341,23 @@ namespace SummaryGenerator
             return dt;
         }
 
+        private String MySubString(int startIndex, int endIndex, String text) {
+
+            char[] textArray = text.ToCharArray();
+            String subText = null;
+
+            for (int i = startIndex; i <= endIndex; i++) {
+                subText += textArray[i];
+            }
+
+            return subText;
+        }
+
         private void btnSrcFileDialog_Click(object sender, EventArgs e)
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
             openFileDialog.Filter = "Excel Files|*.xls;*.xlsx;*.xlsm;";
-            openFileDialog.InitialDirectory = txtSrcFilePath.Text;
+            openFileDialog.InitialDirectory = System.IO.Path.GetDirectoryName(txtSrcFilePath.Text);
 
             if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
@@ -278,7 +369,7 @@ namespace SummaryGenerator
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
             openFileDialog.Filter = "Excel Files|*.xls;*.xlsx;*.xlsm;";
-            openFileDialog.InitialDirectory = txtDestFilePath.Text;
+            openFileDialog.InitialDirectory = System.IO.Path.GetDirectoryName(txtDestFilePath.Text);
 
             if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
@@ -286,8 +377,15 @@ namespace SummaryGenerator
             }
         }
 
+        private void btnExit_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Are you sure to Exit !!", "Confirmation..", MessageBoxButtons.OKCancel, MessageBoxIcon.Exclamation) == DialogResult.OK)
+                Application.Exit();
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
+            toolStripStatusLabel1.Text = "Make sure to close the excel files before running the tool.";
             rbMs4.Checked = true;
         }
 

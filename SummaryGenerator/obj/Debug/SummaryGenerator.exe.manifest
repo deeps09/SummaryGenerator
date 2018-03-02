@@ -42,14 +42,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="SummaryGenerator.exe" size="22976">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="SummaryGenerator.exe" size="26560">
       <assemblyIdentity name="SummaryGenerator" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>kexAaxGjnD9YbyB4nSI47kHt3FJRPGpi8caHDaX1fBw=</dsig:DigestValue>
+        <dsig:DigestValue>uOr392/psS2i1kzld+zyNf5cSIMOdKPVr1v4nd3JMKM=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>
