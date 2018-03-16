@@ -21,6 +21,7 @@ namespace SummaryGenerator
 
         // keys stored in app.config file used to show recent file paths
         const String MS4_SRC_FILE_KEY = "ms4SrcFile", MS4_DEST_FILE_KEY = "ms4DestFile", INI_SRC_FILE_KEY = "initiateSrcFile", INI_DEST_FILE_KEY = "initiateDestFile";
+        String readAssigneeGroup;
 
         public Form1()
         {
@@ -29,32 +30,42 @@ namespace SummaryGenerator
 
         private void btnAdd_Incidents_Click(object sender, EventArgs e)
         {
-            DataTable sourceDataTable = loadDataFromSourceExcel();
+            toolStripStatusLabel1.Text = "Initializing.."; 
 
-            if (sourceDataTable.Rows.Count <= 0) {
-                MessageBox.Show("No records found.. Aborting..","Something went wrong", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
+            // Saving file path in app.config
             Configuration config = ConfigurationManager.OpenExeConfiguration(Application.ExecutablePath);
 
             if (rbMs4.Checked)
-            {   
+            {
+                readAssigneeGroup = "DHE-PtRevCycle-MS4-AppDev";
                 config.AppSettings.Settings[MS4_SRC_FILE_KEY].Value = txtSrcFilePath.Text;
                 config.AppSettings.Settings[MS4_DEST_FILE_KEY].Value = txtDestFilePath.Text;
             }
 
             if (rbInitiate.Checked)
             {
+                readAssigneeGroup = "DHE-EMPI-Initiate";
                 config.AppSettings.Settings[INI_SRC_FILE_KEY].Value = txtSrcFilePath.Text;
                 config.AppSettings.Settings[INI_DEST_FILE_KEY].Value = txtDestFilePath.Text;
             }
             config.Save(ConfigurationSaveMode.Modified);
 
+            // loading data from source sheet 
+            DataTable sourceDataTable = loadDataFromSourceExcel();
+
+            if (sourceDataTable.Rows.Count <= 0) {
+                MessageBox.Show("No records found.. Aborting..","Something went wrong", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            
+            // uploading data in destination sheet
             updateIncidentTracker(sourceDataTable, txtDestFilePath.Text); 
         }
 
         private DataTable loadDataFromSourceExcel() {
+            String whereCondition = null;
+            whereCondition = "AND ([Assignment group] = '" + readAssigneeGroup + "' OR [Original Assignment Group] = '" + readAssigneeGroup + "')";
+
             toolStripStatusLabel1.Text = "Reading records from source file..";
             Thread.Sleep(2000);
 
@@ -62,7 +73,7 @@ namespace SummaryGenerator
             String srcSheetName = "Page 1$";
             //String srcConnStr = @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=C:\Users\..\Desktop\ServiceMattersIncidentTool\incident.xlsx;Extended Properties=""Excel 12.0 Xml;HDR=Yes;""";
             String srcConnStr = @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + txtSrcFilePath.Text + @";Extended Properties=""Excel 12.0 Xml;HDR=Yes;""";
-            String selCommandText = "SELECT * FROM ['" + srcSheetName + "'] WHERE [Number] <> '" + _null + "' ORDER BY [Number]";
+            String selCommandText = "SELECT * FROM ['" + srcSheetName + "'] WHERE [Number] <> '" + _null + "' "+ whereCondition  + " ORDER BY [Number]";
 
             Cursor.Current = Cursors.WaitCursor;
             DataTable dataTable = new DataTable();
@@ -85,8 +96,9 @@ namespace SummaryGenerator
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.Message, "Error while reading from source");
+                MessageBox.Show(e.Message, "Error while reading from source", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Cursor.Current = Cursors.Default;
+                toolStripStatusLabel1.Text = "Something went wrong..";
             }
             finally {
                 oleDbCmnd = null;
@@ -109,11 +121,11 @@ namespace SummaryGenerator
             MyApp.Visible = false;
             xlWorkBooks = MyApp.Workbooks;
             MyBook = xlWorkBooks.Open(destFilePath);
-            MySheet = MyBook.Sheets[7];
+            MySheet = MyBook.Sheets["Incident Tracker"];
 
             // variable declaration
-            String incidentNumber, incidentDesc, severity, status, resolutionSummary, assigneeIndividual, 
-                customerName, incidentOpenDt, incidentActualStartDt, incidentResolvedDt, assigneeGroup;
+            String incidentNumber, incidentShortDesc, incidentLongDesc, severity, status, resolutionSummary, assigneeIndividual, 
+                customerName, incidentOpenDt, incidentAssignDt, incidentResolvedDt, assigneeGroup, originalAssigneeGroup;
 
             // fetching relevant data from resolution summary
             String keywordCategory = "CATEGORY: ", keywordRootCause = "ROOT CAUSE: ",
@@ -132,54 +144,74 @@ namespace SummaryGenerator
             {
                 foreach (DataRow dataRow in srcDataset.Rows)
                 {
-                    toolStripStatusLabel1.Text = "Prcessing "+ i +" of "+ srcDataset.Rows.Count + " incidents..";
+                    ticketType = category = subCategory = affctedItem = affectedFacility = null;
+
+                    toolStripStatusLabel1.Text = "Prcessing " + i + " of " + srcDataset.Rows.Count + " incidents..";
                     countOfIncidentFound = -1;
 
                     incidentNumber = dataRow["Number"].ToString();
                     resolutionSummary = dataRow["Close notes"].ToString().Replace("'", "''");
                     customerName = dataRow["Customer"].ToString();
-                    incidentDesc = dataRow["Short description"].ToString().Replace("'", "''");
+                    incidentShortDesc = dataRow["Short description"].ToString().Replace("'", "''");
+                    incidentLongDesc = dataRow["Description"].ToString().Replace("'", "''");
                     severity = dataRow["Priority"].ToString();
                     status = dataRow["State"].ToString();
                     assigneeGroup = dataRow["Assignment group"].ToString();
+                    originalAssigneeGroup = dataRow["Original Assignment Group "].ToString();
                     assigneeIndividual = dataRow["Assigned to"].ToString();
-                    incidentOpenDt = dataRow["Created"].ToString();
-                    incidentActualStartDt = dataRow["Actual start"].ToString();
+                    incidentOpenDt = dataRow["Opened"].ToString(); // previously it was created
+                    incidentAssignDt = dataRow["Actual start"].ToString();
                     incidentResolvedDt = dataRow["Resolved"].ToString();
 
-                    if (incidentResolvedDt == String.Empty)
-                        incidentResolvedDt = DateTime.MinValue.ToString();
 
-                    if (resolutionSummary.Length > 10)
+                    if (customerName == "OMI Integration Service")
+                        incidentShortDesc = incidentLongDesc;
+
+                    try
                     {
-                        ticketType = category = subCategory = affctedItem = affectedFacility = null;
-
-                        if (resolutionSummary.Contains(keywordRootCause))
-                            ticketType = MySubString(keywordCategory.Length, resolutionSummary.IndexOf(keywordRootCause) - 2, resolutionSummary);
-
-                        if (resolutionSummary.Contains(keywordCategory))
+                        if (resolutionSummary.Length > 10)
                         {
-                            category = MySubString(resolutionSummary.IndexOf(keywordRootCause) + keywordRootCause.Length, resolutionSummary.IndexOf(keywordAffItems) - 2, resolutionSummary);
-                            subCategory = category.Substring(category.IndexOf("-") + 1);
-                            category = category.Substring(0, category.IndexOf("-"));
+
+                            if (resolutionSummary.Contains(keywordRootCause))
+                                ticketType = MySubString(keywordCategory.Length, resolutionSummary.IndexOf(keywordRootCause) - 2, resolutionSummary);
+
+                            if (resolutionSummary.Contains(keywordCategory))
+                            {
+                                category = MySubString(resolutionSummary.IndexOf(keywordRootCause) + keywordRootCause.Length, resolutionSummary.IndexOf(keywordAffItems) - 2, resolutionSummary);
+                                subCategory = category.Substring(category.IndexOf("-") + 1);
+                                category = category.Substring(0, category.IndexOf("-"));
+                            }
+
+                            if (resolutionSummary.Contains(keywordAffItems))
+                                affctedItem = MySubString(resolutionSummary.IndexOf(keywordAffItems) + keywordAffItems.Length, resolutionSummary.IndexOf(keywordFacility) - 2, resolutionSummary);
+
+                            if (resolutionSummary.Contains(keywordFacility))
+                            {
+                                affectedFacility = MySubString(resolutionSummary.IndexOf(keywordFacility) + keywordFacility.Length, resolutionSummary.IndexOf(keywordOutage) - 2, resolutionSummary);
+
+                                if (affectedFacility.Contains("/")) // this checks if affected facility is having customer name appeneded
+                                    affectedFacility = affectedFacility.Substring(0, affectedFacility.IndexOf("/"));
+                            }
                         }
-
-                        if (resolutionSummary.Contains(keywordAffItems))
-                            affctedItem = MySubString(resolutionSummary.IndexOf(keywordAffItems) + keywordAffItems.Length, resolutionSummary.IndexOf(keywordFacility) - 2, resolutionSummary);
-
-                        if (resolutionSummary.Contains(keywordFacility))
-                        {
-                            affectedFacility = MySubString(resolutionSummary.IndexOf(keywordFacility) + keywordFacility.Length, resolutionSummary.IndexOf(keywordOutage) - 2, resolutionSummary);
-
-                            if (affectedFacility.Contains("/")) // this checks if affected facility is having customer name appeneded
-                                affectedFacility = affectedFacility.Substring(0, affectedFacility.IndexOf("/")); 
-                        }
-
+                    }
+                    catch (Exception ex)
+                    {
+                        
                     }
 
+                    // populating cat. and sub-category if ticket was reassigned to another group
+                    if (category == null && subCategory == null && assigneeGroup != originalAssigneeGroup && (status == "Closed" || status == "Resolved")) {
+                        category = "Others";
+                        subCategory = "Re-assigned";
+                    }
 
+                    // setting ticket-type value as not-applicable in case initiate application is selected
+                    if (rbInitiate.Checked) {
+                        ticketType = "Not Applicable";
+                    }
+
+                    // searching for the incident from incidents picked from tracker to know its row-index
                     foundRows = destDataSet.Select("F1 = '" + incidentNumber + "'");
-
 
                     if (foundRows.Count() > 0)
                         countOfIncidentFound = destDataSet.Rows.IndexOf(foundRows[0]);
@@ -192,7 +224,7 @@ namespace SummaryGenerator
                         if (ticketType != null)
                             MySheet.Cells[totalCount, 2] = ticketType;
 
-                        MySheet.Cells[totalCount, 3] = incidentDesc;
+                        MySheet.Cells[totalCount, 3] = incidentShortDesc;
                         MySheet.Cells[totalCount, 4] = severity;
 
                         if (category != null)
@@ -202,7 +234,7 @@ namespace SummaryGenerator
                             MySheet.Cells[totalCount, 6] = subCategory;
 
                         if (affectedFacility != null)
-                            MySheet.Cells[totalCount, 7] = affectedFacility;
+                            MySheet.Cells[totalCount, 7] = affctedItem;
 
                         MySheet.Cells[totalCount, 8] = status;
                         MySheet.Cells[totalCount, 9] = resolutionSummary;
@@ -211,7 +243,8 @@ namespace SummaryGenerator
                         MySheet.Cells[totalCount, 12] = assigneeIndividual;
                         MySheet.Cells[totalCount, 13] = customerName;
                         MySheet.Cells[totalCount, 14] = incidentOpenDt;
-                        MySheet.Cells[totalCount, 16] = incidentResolvedDt;
+                        MySheet.Cells[totalCount, 15] = incidentAssignDt;
+                        MySheet.Cells[totalCount, 17] = incidentResolvedDt;
 
                         if (affectedFacility != null)
                             MySheet.Cells[totalCount, 31] = affectedFacility;
@@ -235,7 +268,7 @@ namespace SummaryGenerator
                             if (ticketType!= null)
                                 MySheet.Cells[countOfIncidentFound, 2] = ticketType;
 
-                            MySheet.Cells[countOfIncidentFound, 3] = incidentDesc;
+                            MySheet.Cells[countOfIncidentFound, 3] = incidentShortDesc;
                             MySheet.Cells[countOfIncidentFound, 4] = severity;
 
                             if (category != null)
@@ -245,7 +278,7 @@ namespace SummaryGenerator
                                 MySheet.Cells[countOfIncidentFound, 6] = subCategory;
 
                             if (affectedFacility != null)
-                                MySheet.Cells[countOfIncidentFound, 7] = affectedFacility;
+                                MySheet.Cells[countOfIncidentFound, 7] = affctedItem;
 
                             MySheet.Cells[countOfIncidentFound, 8] = status;
                             MySheet.Cells[countOfIncidentFound, 9] = resolutionSummary;
@@ -254,8 +287,9 @@ namespace SummaryGenerator
                             MySheet.Cells[countOfIncidentFound, 12] = assigneeIndividual;
                             MySheet.Cells[countOfIncidentFound, 13] = customerName;
                             MySheet.Cells[countOfIncidentFound, 14] = incidentOpenDt;
-                            MySheet.Cells[countOfIncidentFound, 16] = incidentResolvedDt;
-
+                            MySheet.Cells[countOfIncidentFound, 15] = incidentAssignDt;
+                            MySheet.Cells[countOfIncidentFound, 17] = incidentResolvedDt;
+                            
                             if (affectedFacility != null)
                                 MySheet.Cells[countOfIncidentFound, 31] = affectedFacility;
 
